@@ -1,0 +1,114 @@
+---
+title: "Classifying type of physical activity"
+author: "Pieter ten Have"
+date: "February 13, 2017"
+output: html_document
+---
+
+
+_Introduction_
+
+
+The goal of this assignment is to predict the type of physical activity in 20 sets of measurements.
+I had a training dataset containing 19.622 observations and a testing set of 20 observations.
+There were 5 types of activity labelled A, B, C, D and E.
+
+First I downloaded the two datasets. Then I removed the first 7 columns of data, which could never be used for prediction.
+Them I converted all items of the remaining columns to numeric values so the algorithms could se them.
+Finally I replaced missing values by zeros, because certain algorithms can't handle these.
+
+
+```{r setup, echo=FALSE}
+library(caret)
+
+# Download training and test data
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(url, "train987.csv")
+training <- read.csv("train987.csv", header=T, sep=",")
+
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url, "test987.csv")
+testing <- read.csv("test987.csv", header=T, sep=",")
+
+# Remove first 7 columns which can never be used for prediction.
+training <- training[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+
+# Convert all values to numeric, and replace all NAs by zeros.
+nc <- ncol(training)
+nc2 <- nc  - 1
+for (x in 1:nc2) {
+  training[, x] <- as.numeric(training[, x])
+  vk <- is.na(training[, x])
+  training[vk, x] <- 0
+}
+for (x in 1:nc2) {
+    testing[, x] <- as.numeric(testing[, x])
+    vk <- is.na(testing[, x])
+    testing[vk, x] <- 0    
+}
+```
+
+
+I will now use 10-fold cross validation to see which algorithm works best.
+I will start with LDA and GBM, and if one reaches an accuracy of at least 0.9 I will stop.
+Else, I will continue with randomForest, which will take very much time. My laptop is an i5.
+
+I expect LDA to do well, because physical activities have coherent speeds and accelerations, which can be modelled with parameters. I also expect GBM to do well, because boosting is an advanced algorithm.
+Logistic regression can't be used, as there are more than 2 classes to predict.
+I will not use ADA boost, because this algorithm is comparable to GBM.
+Lineair, lasso and ridge regression can't be used, because I have to predict categories not numerical values.
+
+10-fold cross validation will be used to see whether lineair discriminant analysis (LDA) or boosting (GBM) has the highest accuracy.
+In order to save time, I'll use the parameters of GBM which worked well on the training dataset. These are: interaction depth = 3, number of trees = 150, shrinkage = 0.1, minimal number of obs in node = 10.
+
+
+_Assessing accuracy of LDA_
+
+
+```{r}
+train_control <- trainControl(method="repeatedcv", number=10, repeats=1)
+model_lda <- train(classe~., data=training, trControl=train_control, method="lda")
+print(model_lda)
+```
+
+
+The accuracy of Lineair Discriminant Analysis is 0.70.
+
+
+_Assessing accuracy of GBM_
+
+
+```{r}
+train_control <- trainControl(method="repeatedcv", number=10, repeats=1)
+gbmGrid <-  expand.grid(interaction.depth = 3, n.trees = 150, shrinkage = 0.1, n.minobsinnode = 10)
+model_gbm <- train(classe~., data=training, trControl=train_control, method="gbm", tuneGrid = gbmGrid)
+print(model_gbm)
+```
+
+
+The accuracy of GBM is about 0.96. 
+Clearly GBM has a higher accuracy than LDA.
+I expect the Out of sample error to be slightly higher, with an expected accuracy of 0.95.
+
+Now I'll use GBM for the prediction with the 20 cases from the testing data.
+
+
+```{r}
+y_gbm <- predict(model_gbm, testing[, -nc])
+y_gbm
+```
+
+
+_Conclusion_
+
+
+GBM has a higher accuracy than LDA.
+
+This is the prediction of GBM for the twenty test-cases:
+B A B A A E D B A A B C B A E E A B B B
+
+
+
+
+-/-/-/-/-/-/-/
